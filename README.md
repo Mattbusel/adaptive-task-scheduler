@@ -70,7 +70,7 @@ Each task:
 ##  Running the Example
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/adaptive-task-scheduler.git
+git clone https://github.com/Mattbusel/adaptive-task-scheduler.git
 cd adaptive-task-scheduler
 cargo run
 ```
