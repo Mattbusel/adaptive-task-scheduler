@@ -3,13 +3,13 @@
 
 A proof-of-concept runtime for **dependency-aware, forced task promotion** in Rust using `tokio`.
 
-This prototype demonstrates how async I/O tasks can be dynamically **reclassified and promoted to CPU-bound threads** when their dependencies are blocking higher-priority tasks — a technique inspired by work-stealing schedulers and adaptive runtimes.
+This prototype demonstrates how async I/O tasks can be dynamically **reclassified and promoted to CPU-bound threads** when their dependencies are blocking higher-priority tasks, a technique inspired by work-stealing schedulers and adaptive runtimes.
 
 ---
 
 ##  Why This Matters
 
-Modern async runtimes (like `tokio`) treat I/O and CPU-bound tasks differently — often strictly. But in real-world applications, **task importance and dependencies change over time**. This project introduces a runtime that can:
+Modern async runtimes (like `tokio`) treat I/O and CPU-bound tasks differently, often strictly. But in real-world applications, **task importance and dependencies change over time**. This project introduces a runtime that can:
 
 - Detect when a dependent task is stalling
 - Promote a blocking I/O task to a CPU thread (`tokio::spawn_blocking`)
