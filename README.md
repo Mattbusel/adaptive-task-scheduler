@@ -114,9 +114,6 @@ If you like weird schedulers, async runtimes, or cosmic LLM designs, let's talk.
 
 ---
 
-##  License
-
-MIT License
 
 ```
 
