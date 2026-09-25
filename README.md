@@ -1,131 +1,92 @@
-
 # Adaptive Task Scheduler (Rust + Tokio)
 
-A proof-of-concept runtime for **dependency-aware, forced task promotion** in Rust using `tokio`.
+A design for a Tokio-based runtime that notices when an async task is holding up the tasks that depend on it, and promotes that task onto a dedicated thread so the chain unblocks.
 
-This prototype demonstrates how async I/O tasks can be dynamically **reclassified and promoted to CPU-bound threads** when their dependencies are blocking higher-priority tasks, a technique inspired by work-stealing schedulers and adaptive runtimes.
+> **Status: design notes only. There is no Rust code in this repository yet** (no `Cargo.toml`, no `src/`), so there is nothing to build or run. The sections below describe the intended prototype.
 
----
+## Why
 
-##  Why This Matters
+Async runtimes like Tokio handle I/O-bound futures on a small worker pool and expect CPU-heavy or blocking work to be moved off it explicitly with `spawn_blocking`. That decision is made once, when the code is written. In real systems, though, a task's importance changes: a slow, low-priority job can suddenly become the thing a latency-critical request is waiting on. This project explores a scheduler that makes that call at run time, based on the dependency graph.
 
-Modern async runtimes (like `tokio`) treat I/O and CPU-bound tasks differently, often strictly. But in real-world applications, **task importance and dependencies change over time**. This project introduces a runtime that can:
+It borrows from priority inheritance in real-time operating systems (a low-priority task holding a resource inherits the priority of the task waiting on it) and from work-stealing schedulers.
 
-- Detect when a dependent task is stalling
-- Promote a blocking I/O task to a CPU thread (`tokio::spawn_blocking`)
-- Simulate task stealing and priority bumping
+## Planned features
 
-Think of it as a step toward a **self-optimizing, latency-aware task graph engine**.
+- Register tasks with explicit dependencies on other tasks
+- Run tasks as ordinary Tokio futures by default (I/O simulated with `tokio::time::sleep`)
+- Watch for dependents that have waited longer than a threshold
+- Promote the blocking task to a dedicated thread via `tokio::task::spawn_blocking`
+- Trace spawns, waits, promotions and completions in the log
 
----
-
-##  Features
-
-- Task registration with dependencies
-- Async I/O task simulation with `tokio::sleep`
-- Blocking detection via dependency monitoring
--  Dynamic reclassification from I/O to CPU
--  Logging to trace execution flow
-
----
-
-##  Architecture Overview
+## Intended architecture
 
 ```text
 +------------------+
-| Task Manager     | ◄── Registers all tasks and dependencies
+| Task Manager     | <-- registers tasks and their dependencies
 +------------------+
-        │
-        ▼
+        |
+        v
 +--------------------------+
-| Tokio Runtime (I/O pool) |
-| - Runs default tasks     |
+| Tokio runtime (I/O pool) |
+| - runs tasks by default  |
 +--------------------------+
-        │
-[Waits too long?] → promote
-        │
-        ▼
+        |
+  dependent waiting too long? -> promote
+        |
+        v
 +---------------------------+
-| CPU-bound Thread Pool     |
-| - Runs promoted tasks     |
+| Blocking thread pool      |
+| - runs promoted tasks     |
 +---------------------------+
-````
-
-Each task:
-
-* Has a unique ID
-* Knows what tasks it depends on
-* Can be upgraded from an I/O future to a blocking operation if needed
-
----
-
-##  Crates Used
-
-* [`tokio`](https://crates.io/crates/tokio) — Async runtime
-* [`dashmap`](https://crates.io/crates/dashmap) — For concurrent task registry
-* (Optional) [`uuid`](https://crates.io/crates/uuid) — For unique task IDs
-
----
-
-##  Running the Example
-
-```bash
-git clone https://github.com/Mattbusel/adaptive-task-scheduler.git
-cd adaptive-task-scheduler
-cargo run
 ```
 
-You should see logs like:
+Each task has a unique ID, knows which tasks it depends on, and can be moved from the async pool to a blocking thread when needed.
+
+Planned crates: [`tokio`](https://crates.io/crates/tokio) for the runtime, [`dashmap`](https://crates.io/crates/dashmap) for a concurrent task registry, and optionally [`uuid`](https://crates.io/crates/uuid) for task IDs.
+
+Intended layout:
 
 ```
-[spawn] Task A started (depends on Task B)
-[spawn] Task B started
-[wait]  Task A still waiting on B... triggering promotion
-[promote] Task B moved to CPU thread
+adaptive-task-scheduler/
+  Cargo.toml
+  src/main.rs
+  README.md
+```
+
+## What a first run should show
+
+Once implemented, the demo is meant to print a trace along these lines (illustrative, not real output):
+
+```
+[spawn]    Task A started (depends on Task B)
+[spawn]    Task B started
+[wait]     Task A still waiting on B... triggering promotion
+[promote]  Task B moved to blocking thread
 [complete] Task B done
 [complete] Task A done
 ```
 
----
+## Open design questions
 
-##  Ideas for Expansion
+- A future that is already running cannot be moved to another thread mid-poll. Promotion probably means the task is written so it can be restarted or resumed on a blocking thread, or that "promotion" raises its priority in a custom queue instead.
+- How to pick the wait threshold, fixed or adaptive to load.
+- How to avoid promotion storms when many dependents stall at once.
 
-* DAG-based dependency scheduler
-* Prioritized task queues
-* Real-time load metrics (CPU / I/O saturation)
-* LLM inference server that adapts execution paths based on queue pressure
-* Integration with `loom` to test concurrency correctness
+## Ideas for later
 
----
+- Full DAG scheduling with topological ordering
+- Prioritized task queues
+- Real-time CPU and I/O saturation metrics
+- An LLM inference server that adapts execution paths under queue pressure
+- Model checking with [`loom`](https://crates.io/crates/loom) for concurrency correctness
 
-##  Inspiration
+## Inspiration
 
-* Erlang’s scheduler and supervision model
-* Google's Borg runtime
-* Rayon’s work-stealing and task forking
-* Real-time OSes and priority inheritance
+- Erlang's scheduler and supervision model
+- Google's Borg cluster manager
+- Rayon's work stealing and task forking
+- Real-time operating systems and priority inheritance
 
----
+## Author
 
-##  Author
-
-Created by Matthew Busel.
-If you like weird schedulers, async runtimes, or cosmic LLM designs, let's talk.
-
----
-
-
-```
-
-
-
-
-```
-
-adaptive-task-scheduler/
-├── src/
-│   └── main.rs
-├── Cargo.toml
-└── README.md
-
-
+Matthew Busel. If you like odd schedulers and async runtimes, open an issue and say hello.
